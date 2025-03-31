@@ -1,4 +1,8 @@
 import pandas as pd, numpy, sklearn
+#pip install pandas
+#pip install scikit-learn
+
+
 
 def main():
     print("Hi Marky & Eliy")
