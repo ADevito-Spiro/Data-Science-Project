@@ -35,21 +35,31 @@ x = df['comment_text']
 print(x)
 #You had it as identity hate when in the excel sheet it was identity_hate
 y = kf['toxic']
-print(y)
+st = kf['severe_toxic']
 #Later on I will change the test data to be the actual test file, but I am lazy rn sorry guys
 x_train = x.iloc[:1000]  
 y_train = y.iloc[:1000]  
+sty_train = st.iloc[:1000]
+
+print(sty_train)
 
 x_test = x.iloc[1000:1400]   
 y_test = y.iloc[1000:1400] 
 
-LR_model = make_pipeline(TfidfVectorizer() , LogisticRegression())
+sty_test = st.iloc[1000:1400]
 
+print(sty_test)
+
+LR_model = make_pipeline(TfidfVectorizer() , LogisticRegression())
+LR_model2 = make_pipeline(TfidfVectorizer() , LogisticRegression())
 
 LR_model.fit(x_train , y_train)
+LR_model2.fit(x_train , sty_train)
 
 LR_y_pred = LR_model.predict(x_test)
+LR_2y_pred = LR_model2.predict(x_test)
 
 accuracy = accuracy_score(y_test, LR_y_pred)
-
+accuracy2 = accuracy_score(sty_test , LR_2y_pred)
 print(f"\nLogistic Regression Model Accuracy: {accuracy:.2f}")
+print(f"\nLogistic Regression Model 2 Accuracy: {accuracy2:.2f}")
