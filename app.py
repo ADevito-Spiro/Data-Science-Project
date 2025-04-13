@@ -48,7 +48,7 @@ for label in label_names:
     y_train = df[label].iloc[:10000]
     y_test = test_labels[label].iloc[:10000]
 
-    model = make_pipeline(TfidfVectorizer(ngram_range=(1,2), max_df=0.9, min_df=5, stop_words='english'),
+    model = make_pipeline(TfidfVectorizer(),
                           LogisticRegression(max_iter=100000, class_weight='balanced')
     )
     model.fit(x_train, y_train)
@@ -60,5 +60,5 @@ for label in label_names:
 
 # Display results
 results_df = pd.DataFrame(results)
-print("\nModel Accuracy Comparison:")
+print("\nAccuracy Score:")
 print(results_df)
