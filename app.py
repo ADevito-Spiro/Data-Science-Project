@@ -1,65 +1,65 @@
-import pandas as pd, numpy as np, sklearn, matplotlib.pyplot as plt
-from nltk.tokenize import word_tokenize
+import pandas as pd, numpy as np, matplotlib.pyplot as plt
 
 #I used two of the homework models in order to do some stuff
-from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
-
-#This isletting me turn the text into numbers and then the pipeline lets me combine it with LR
-#This training it to be able to tell what type of toxicity it is.
 from sklearn.pipeline import make_pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-#If yall wanna use something more fancy than sklearn in the future feel free but I just want us to actually have something Sunday and I am at a runner's rn 
-"""
-You will need to install this in your venv folder.
 
-pip install pandas
-pip install scikit-learn
-pip install matplotlib
-pip install nltk
-
-"""
 
 # Input the CSV data, one of the comments and one for the labels.
-# TODO: Do something with the IDs to link the comments to the labels
-data = pd.read_csv('toxicity_data/test.csv')
-labels = pd.read_csv('toxicity_data/test_labels.csv')
+data = pd.read_csv('toxicity_data/train.csv')
+test_labels = pd.read_csv('toxicity_data/test_labels.csv')
+test_data = pd.read_csv('toxicity_data/test.csv')
 df = pd.DataFrame(data)
-kf = pd.DataFrame(labels)
-print(kf.columns)
+kf = pd.DataFrame(test_labels)
+tf = pd.DataFrame(test_data)
 
 # Assign the comments as the X and the different determinations of toxicity as the Y
 x = df['comment_text']
-print(x)
-#You had it as identity hate when in the excel sheet it was identity_hate
-y = kf['toxic']
-st = kf['severe_toxic']
-#Later on I will change the test data to be the actual test file, but I am lazy rn sorry guys
-x_train = x.iloc[:1000]  
-y_train = y.iloc[:1000]  
-sty_train = st.iloc[:1000]
+#print(x)
+y = df['toxic']
+z = df['severe_toxic']
+k = df['obscene']
+n = df['threat']
+m = df['insult']
+h = df['identity_hate']
 
-print(sty_train)
+test_x = tf['comment_text']
+test_y = kf['toxic']
+test_z = kf['severe_toxic']
+test_k = kf['obscene']
+test_n = kf['threat']
+test_m = kf['insult']
+test_h = kf['identity_hate']
 
-x_test = x.iloc[1000:1400]   
-y_test = y.iloc[1000:1400] 
+x_train = x.iloc[:10000]  
+y_train = y.iloc[:10000]  
+z_train = z.iloc[:10000]
+k_train = k.iloc[:10000]
+n_train = n.iloc[:10000]
+m_train = m.iloc[:10000]
+h_train = h.iloc[:10000]
 
-sty_test = st.iloc[1000:1400]
+label_names = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+results = {"Model": [], "Accuracy": []}
 
-print(sty_test)
+for label in label_names:
+    y_train = df[label].iloc[:10000]
+    y_test = kf[label].iloc[:10000]
 
-LR_model = make_pipeline(TfidfVectorizer() , LogisticRegression())
-LR_model2 = make_pipeline(TfidfVectorizer() , LogisticRegression())
+    model = make_pipeline(TfidfVectorizer(ngram_range=(1,2), max_df=0.9, min_df=5, stop_words='english'),
+                          LogisticRegression(max_iter=100000, class_weight='balanced')
+    )
+    model.fit(x_train, y_train)
+    preds = model.predict(test_x)
+    acc = accuracy_score(test_y, preds)
 
-LR_model.fit(x_train , y_train)
-LR_model2.fit(x_train , sty_train)
+    results["Model"].append(f"LR - {label}")
+    results["Accuracy"].append(round(acc, 3))
 
-LR_y_pred = LR_model.predict(x_test)
-LR_2y_pred = LR_model2.predict(x_test)
-
-accuracy = accuracy_score(y_test, LR_y_pred)
-accuracy2 = accuracy_score(sty_test , LR_2y_pred)
-print(f"\nLogistic Regression Model Accuracy: {accuracy:.2f}")
-print(f"\nLogistic Regression Model 2 Accuracy: {accuracy2:.2f}")
+# Display results
+results_df = pd.DataFrame(results)
+print("\nModel Accuracy Comparison:")
+print(results_df)
