@@ -1,4 +1,4 @@
-import pandas as pd, numpy as np, matplotlib.pyplot as plt
+import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 from sklearn.pipeline import make_pipeline
@@ -55,7 +55,7 @@ for label in label_names:
     preds = model.predict(test_x)
     acc = accuracy_score(test_y, preds)
 
-    results["Model"].append(f"LR - {label}")
+    results["Model"].append(f"Logisitcal Regression - {label}")
     results["Accuracy"].append(round(acc, 3))
 
 # Display results
