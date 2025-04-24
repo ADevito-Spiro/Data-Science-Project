@@ -39,9 +39,10 @@ h_train = h.iloc[:100000]
 label_names = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
 results = {"Model": [], "Accuracy": []}
 
+models = {}
 for label in label_names:
-    y_train = df[label].iloc[:100000]
-    y_test = test_labels[label].iloc[:60000]
+    y_train = df[label].iloc[:10000]
+    y_test = test_labels[label].iloc[:10000]
 
     model = make_pipeline(TfidfVectorizer(),
                           LogisticRegression(max_iter=100000, class_weight='balanced')
@@ -49,7 +50,7 @@ for label in label_names:
     model.fit(x_train, y_train)
     preds = model.predict(test_x)
     acc = accuracy_score(test_y, preds)
-
+    models[label] = model
     results["Model"].append(f"Logisitcal Regression - {label}")
     results["Accuracy"].append(round(acc, 3))
 
@@ -57,3 +58,18 @@ for label in label_names:
 results_df = pd.DataFrame(results)
 print("\nAccuracy Score:")
 print(results_df)
+
+def predict_all_labels(comments):
+    toxic_labels = []
+    for label, model in models.items():
+        if model.predict([comments])[0] == 1:
+            toxic_labels.append(label)
+    if toxic_labels:
+        return f"This comment is toxic in: {', '.join(toxic_labels)}"
+    else:
+        return "This comment is not toxic in any category."
+
+gr.Interface(fn=predict_all_labels,
+              inputs=gr.Textbox(placeholder = "Type here...", label = "Enter an offensive or inoffensive comment!"),
+              outputs=gr.Textbox(label = "Result")
+              ).launch()
