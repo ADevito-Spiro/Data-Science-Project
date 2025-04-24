@@ -41,8 +41,8 @@ results = {"Model": [], "Accuracy": []}
 
 models = {}
 for label in label_names:
-    y_train = df[label].iloc[:10000]
-    y_test = test_labels[label].iloc[:10000]
+    y_train = df[label].iloc[:100000]
+    y_test = test_labels[label].iloc[:60000]
 
     model = make_pipeline(TfidfVectorizer(),
                           LogisticRegression(max_iter=100000, class_weight='balanced')
