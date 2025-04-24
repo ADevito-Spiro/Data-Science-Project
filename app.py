@@ -65,7 +65,7 @@ def predict_all_labels(comments):
         if model.predict([comments])[0] == 1:
             toxic_labels.append(label)
     if toxic_labels:
-        return f"This comment is toxic in: {', '.join(toxic_labels)}"
+        return f"This comment is: {', '.join(toxic_labels)}"
     else:
         return "This comment is not toxic in any category."
 
