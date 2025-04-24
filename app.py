@@ -1,4 +1,5 @@
 import pandas as pd
+import gradio as gr
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 from sklearn.pipeline import make_pipeline
