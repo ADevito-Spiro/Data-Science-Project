@@ -6,9 +6,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix, roc_curve, auc, precision_recall_curve, average_precision_score, classification_report
 from sklearn.pipeline import make_pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer
-from tqdm import tqdm
+from tqdm import tqdm       # Cute lil progress bar when the program is loading
 
-# Download necessary NLTK resources
+# Download necessary NLTK resources if they don't exist
 try:
     nltk.data.find('corpora/stopwords')
     nltk.data.find('tokenizers/punkt_tab')
@@ -24,24 +24,36 @@ data = pd.read_csv('toxicity_data/train.csv')
 test_labels = pd.read_csv('toxicity_data/test_labels_cleaned.csv')
 test_data = pd.read_csv('toxicity_data/test_filtered.csv')
 df = pd.DataFrame(data)
+tf = pd.DataFrame(test_labels)
+td = pd.DataFrame(test_data)
+
+# Function to remove stop words
+def remove_stop_words(text):
+    tokens = word_tokenize(text)
+    filtered_tokens = [word for word in tokens if word.lower() not in stop_words]
+    return " ".join(filtered_tokens)
 
 # Ensure matching number of samples in training and testing data
 test_size = len(test_labels)
 
+# Declare variables
 label_names = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
 results = []
 models = {}
+classification_reports = {}
 
 # Train models and collect results
 for label in tqdm(label_names, desc="Training models"):
     y_train_label = df[label].iloc[:test_size]
-    y_test_label = test_labels[label].iloc[:test_size]
+    y_test_label = tf[label].iloc[:test_size]
+
+    # Added hyperparameters, set the n-gram rane to be a bigram 
     model = make_pipeline(
         TfidfVectorizer(max_features=10000, ngram_range=(1,2), min_df=2, max_df=0.8, sublinear_tf=True),
         LogisticRegression(C=1.0, penalty='l2', solver='lbfgs', class_weight='balanced', max_iter=1000)
     )
     model.fit(df['comment_text'].iloc[:test_size], y_train_label)
-    preds = model.predict(test_data['comment_text'][:test_size])
+    preds = model.predict(td['comment_text'][:test_size])
     report = classification_report(y_test_label, preds, output_dict=True, zero_division=0)
     
     results.append({
@@ -138,16 +150,10 @@ print("\nModel Performance:")
 print(results_df)
 
 # Generate all diagrams
-generate_diagrams(models, results_df, df, test_labels, test_data['comment_text'], test_size, label_names)
-
-# Function to remove stop words
-def remove_stop_words(text):
-    tokens = word_tokenize(text)
-    filtered_tokens = [word for word in tokens if word.lower() not in stop_words]
-    return " ".join(filtered_tokens)
+generate_diagrams(models, results_df, df, test_labels, td['comment_text'], test_size, label_names)
 
 # Function to perform sentiment analysis using TextBlob
-def analyze_sentiment(text):
+def check_sentiment(text):
     blob = TextBlob(text)
     polarity = blob.sentiment.polarity
     subjectivity = blob.sentiment.subjectivity
@@ -155,10 +161,10 @@ def analyze_sentiment(text):
     return sentiment, polarity, subjectivity
 
 # Function to predict toxicity labels and sentiment
-def predict_all_labels_with_sentiment(comments):
-    cleaned_comments = remove_stop_words(comments)
-    toxic_labels = [label for label, model in models.items() if model.predict([cleaned_comments])[0] == 1]
-    sentiment, polarity, subjectivity = analyze_sentiment(cleaned_comments)
+def sentiment_prediction(comments):
+    processed = remove_stop_words(comments)
+    toxic_labels = [label for label, model in models.items() if model.predict([processed])[0] == 1]
+    sentiment, polarity, subjectivity = check_sentiment(processed)
     if toxic_labels:
         return f"This comment is: {', '.join(toxic_labels)}. \nSentiment: {sentiment} (Polarity: {polarity}, Subjectivity: {subjectivity})"
     return f"This comment is not toxic in any category. \nSentiment: {sentiment} (Polarity: {polarity}, Subjectivity: {subjectivity})"
@@ -174,14 +180,39 @@ with gr.Blocks(css="""
     background-color: #C5B4E3;
 }
 """) as demo:
-    gr.Markdown("Toxicity Detector with Sentiment Analysis")
-    gr.Markdown("Enter a comment.")
+    gr.Markdown("## Toxicity Detector with Sentiment Analysis")
+    
+    # Input and prediction section
+    gr.Markdown("Enter a comment to analyze for toxicity and sentiment.")
     with gr.Row():
         input_box = gr.Textbox(label="Comment", placeholder="Type a comment to analyze...", lines=3)
     with gr.Row():
         output_box = gr.Textbox(label="Toxicity Labels and Sentiment", lines=3, interactive=False)
     with gr.Row():
         predict_button = gr.Button("Check Toxicity and Sentiment", elem_classes=["check-button"])
-        predict_button.click(fn=predict_all_labels_with_sentiment, inputs=input_box, outputs=output_box)
+        predict_button.click(fn=sentiment_prediction, inputs=input_box, outputs=output_box)
+    
+    # Model performance section
+    gr.Markdown("## Model Performance Metrics")
+    gr.DataFrame(results_df, label="Performance Summary")
+    
+    # Diagrams section
+    gr.Markdown("## Generated Diagrams")
+    with gr.Row():
+        gr.Image(os.path.join('diagrams', 'performance_bar_plot.png'), label="Model Performance Bar Plot")
+        gr.Image(os.path.join('diagrams', 'class_distribution_pie.png'), label="Class Distribution Pie Charts")
+    with gr.Row():
+        gr.Image(os.path.join('diagrams', 'roc_curves.png'), label="ROC Curves")
+        gr.Image(os.path.join('diagrams', 'precision_recall_curves.png'), label="Precision-Recall Curves")
+    gr.Markdown("### Confusion Matrices")
+    for i in range(0, len(label_names), 2):
+        with gr.Row():
+            gr.Image(os.path.join('diagrams', f'confusion_matrix_{label_names[i]}.png'), 
+                     label=f"Confusion Matrix - {label_names[i]}")
+            if i + 1 < len(label_names):
+                gr.Image(os.path.join('diagrams', f'confusion_matrix_{label_names[i+1]}.png'), 
+                         label=f"Confusion Matrix - {label_names[i+1]}")
+            else:
+                gr.Image(None, visible=False)
 
 demo.launch()
