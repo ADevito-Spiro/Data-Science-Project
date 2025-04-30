@@ -1,17 +1,20 @@
 import pandas as pd
 import gradio as gr
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
 from sklearn.pipeline import make_pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
-from textblob import TextBlob  # Importing TextBlob for sentiment analysis
+from textblob import TextBlob
+import matplotlib.pyplot as plt
+import seaborn as sns
+from tqdm import tqdm
 
 # Download necessary NLTK resources
 nltk.download('stopwords')
-nltk.download('punkt')
+nltk.download('punkt_tab')
 
 # Define stop words
 stop_words = set(stopwords.words('english'))
@@ -41,11 +44,11 @@ test_h = test_labels['identity_hate']
 
 # Ensure matching number of samples in training and testing data
 train_size = 100000
-test_size = len(test_labels)  # Use the full test set size
+test_size = len(test_labels)
 
-# Limit the training data to match the test data size if necessary
-x_train = x.iloc[:test_size]  # Match the size of the test set
-y_train = y.iloc[:test_size]  # Match the size of the test set
+# Limit the training data to match the test data size
+x_train = x.iloc[:test_size]
+y_train = y.iloc[:test_size]
 z_train = z.iloc[:test_size]
 k_train = k.iloc[:test_size]
 n_train = n.iloc[:test_size]
@@ -53,27 +56,40 @@ m_train = m.iloc[:test_size]
 h_train = h.iloc[:test_size]
 
 label_names = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
-results = {"Model": [], "Accuracy": []}
+results = {"Model": [], "Accuracy": [], "F1-Score": []}
 
 models = {}
-for label in label_names:
+for label in tqdm(label_names, desc="Training models"):
     # Align y_train and y_test for each label
     y_train_label = df[label].iloc[:test_size]
     y_test_label = test_labels[label].iloc[:test_size]
 
-    model = make_pipeline(TfidfVectorizer(),
-                          LogisticRegression(max_iter=100000, class_weight='balanced')
+    model = make_pipeline(TfidfVectorizer(), LogisticRegression(max_iter=100000, class_weight='balanced')
     )
     model.fit(x_train, y_train_label)
-    preds = model.predict(test_x[:test_size])  # Limit test data to match training data size
+    preds = model.predict(test_x[:test_size])
     acc = accuracy_score(y_test_label, preds)
+    f1 = f1_score(y_test_label, preds, average='weighted')
     models[label] = model
     results["Model"].append(f"Logistic Regression - {label}")
     results["Accuracy"].append(round(acc, 3))
+    results["F1-Score"].append(round(f1, 3))
+
+    # Generate and save confusion matrix
+    cm = confusion_matrix(y_test_label, preds)
+    plt.figure(figsize=(6, 4))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False,
+                xticklabels=['Non-' + label, label],
+                yticklabels=['Non-' + label, label])
+    plt.title(f'Confusion Matrix - {label}')
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.savefig(f'confusion/confusion_matrix_{label}.png', bbox_inches='tight')
+    plt.close()
 
 # Display results
 results_df = pd.DataFrame(results)
-print("\nAccuracy Score:")
+print("\nModel Performance:")
 print(results_df)
 
 # Function to remove stop words
@@ -113,9 +129,9 @@ def predict_all_labels_with_sentiment(comments):
     
     # Combine toxicity labels and sentiment
     if toxic_labels:
-        return f"This comment is: {', '.join(toxic_labels)}. Sentiment: {sentiment} (Polarity: {polarity}, Subjectivity: {subjectivity})"
+        return f"This comment is: {', '.join(toxic_labels)}. \nSentiment: {sentiment} (Polarity: {polarity}, Subjectivity: {subjectivity})"
     else:
-        return f"This comment is not toxic in any category. Sentiment: {sentiment} (Polarity: {polarity}, Subjectivity: {subjectivity})"
+        return f"This comment is not toxic in any category. \nSentiment: {sentiment} (Polarity: {polarity}, Subjectivity: {subjectivity})"
 
 # Build Gradio interface
 with gr.Blocks(css=""" 
@@ -128,8 +144,8 @@ with gr.Blocks(css="""
     background-color: #C5B4E3;
 }
 """) as demo:
-    gr.Markdown("## 🧪 Multi-label Toxicity Checker with Sentiment Analysis")
-    gr.Markdown("Enter a comment and check which toxicity labels it matches along with its sentiment.")
+    gr.Markdown("Toxicity Detector with Sentiment Analysis")
+    gr.Markdown("Enter a comment.")
 
     with gr.Row():
         input_box = gr.Textbox(
