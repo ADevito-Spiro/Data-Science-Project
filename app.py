@@ -9,6 +9,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm import tqdm       # Cute lil progress bar when the program is loading
 
 # Download necessary NLTK resources if they don't exist
+# Tries and finds the resources in the local directory, if not found then it installs them
 try:
     nltk.data.find('corpora/stopwords')
     nltk.data.find('tokenizers/punkt_tab')
@@ -16,7 +17,7 @@ except LookupError:
     nltk.download('stopwords')
     nltk.download('punkt_tab')
 
-# Define stop words
+# Use NLTK to fetch their stopwords, used for text pre-processing. 
 stop_words = set(stopwords.words('english'))
 
 # Input the CSV data
@@ -27,7 +28,7 @@ df = pd.DataFrame(data)
 tf = pd.DataFrame(test_labels)
 td = pd.DataFrame(test_data)
 
-# Function to remove stop words
+# This function removes the defined stopwords from the input text
 def remove_stop_words(text):
     tokens = word_tokenize(text)
     filtered_tokens = [word for word in tokens if word.lower() not in stop_words]
@@ -42,20 +43,32 @@ results = []
 models = {}
 classification_reports = {}
 
-# Train models and collect results
+# Train the LogisticRegression model using our data, required to make a pipeline with TF-IDF to ensure that LogisticRegression can process text data
 for label in tqdm(label_names, desc="Training models"):
     y_train_label = df[label].iloc[:test_size]
     y_test_label = tf[label].iloc[:test_size]
 
-    # Added hyperparameters, set the n-gram rane to be a bigram 
+    # Added hyperparameters, set the n-gram range to be a bigram 
+    # --------------------------- TF-IDF -------------------------------------------------------
+    # max_features = 10000, limits the maximum amount of terms to the 10000 most frequent terms
+    # ngram_range = (1,2), sets the range to be a bigram, allowing to capture a lil context
+    # min_df = 2, ignore terms that appear more than 2 times
+    # max_df = 0.8, ignores terms that appear more than 80% of the time
+    # sublinear_tf = True, applies sublinear scaling to term frequencies
+    # --------------------------- LogisticRegression --------------------------------------------
+    # C = 1.0, inverse the regularization strength, meaning smaller values imply stronger regularization
+    # penalty = l2, L2 regularization
+    # class_weight = balanced, adjusts weights, for imbalanced datasets it gives high weight to lesser frequent classes
+    # max_iter = 1000, max number of iterations before convergence
     model = make_pipeline(
         TfidfVectorizer(max_features=10000, ngram_range=(1,2), min_df=2, max_df=0.8, sublinear_tf=True),
-        LogisticRegression(C=1.0, penalty='l2', solver='lbfgs', class_weight='balanced', max_iter=1000)
+        LogisticRegression(C=1.0, penalty='l2', class_weight='balanced', max_iter=1000)
     )
     model.fit(df['comment_text'].iloc[:test_size], y_train_label)
     preds = model.predict(td['comment_text'][:test_size])
     report = classification_report(y_test_label, preds, output_dict=True, zero_division=0)
     
+    # Print scores and labels to console for our Accuracy, F1, Precision, and Recall
     results.append({
         "Model": f"Logistic Regression - {label}",
         "Accuracy": round(report['accuracy'], 3),
@@ -67,7 +80,7 @@ for label in tqdm(label_names, desc="Training models"):
 
 results_df = pd.DataFrame(results)
 
-# Function to generate all Matplotlib diagrams
+# Generate all Matplotlib diagrams
 def generate_diagrams(models, results_df, df, test_labels, test_x, test_size, label_names, output_dir='diagrams'):
     os.makedirs(output_dir, exist_ok=True)
     
@@ -146,13 +159,13 @@ def generate_diagrams(models, results_df, df, test_labels, test_x, test_size, la
 
 # Display results
 results_df = pd.DataFrame(results)
-print("\nModel Performance:")
-print(results_df)
+# print("\nModel Performance:")
+# print(results_df)
 
-# Generate all diagrams
+# Generate the diagrams
 generate_diagrams(models, results_df, df, test_labels, td['comment_text'], test_size, label_names)
 
-# Function to perform sentiment analysis using TextBlob
+# Use TextBlob's built in sentiment analysis to determine the sentiment of the provided text, this checks after the stopwords have been removed
 def check_sentiment(text):
     blob = TextBlob(text)
     polarity = blob.sentiment.polarity
@@ -160,7 +173,8 @@ def check_sentiment(text):
     sentiment = 'Positive' if polarity > 0 else 'Negative' if polarity < 0 else 'Neutral'
     return sentiment, polarity, subjectivity
 
-# Function to predict toxicity labels and sentiment
+# Process the data to remove the stop words from the inputted sentence, after processed take the new sentence and use the LogisticRegression model to predict the labels
+# Then uses the processed words to check the sentiment of the sentence, then returning the output
 def sentiment_prediction(comments):
     processed = remove_stop_words(comments)
     toxic_labels = [label for label, model in models.items() if model.predict([processed])[0] == 1]
@@ -169,7 +183,7 @@ def sentiment_prediction(comments):
         return f"This comment is: {', '.join(toxic_labels)}. \nSentiment: {sentiment} (Polarity: {polarity}, Subjectivity: {subjectivity})"
     return f"This comment is not toxic in any category. \nSentiment: {sentiment} (Polarity: {polarity}, Subjectivity: {subjectivity})"
 
-# Build Gradio interface
+# Use Gradio to handle our text input and displaying our diagrams generated from matplotlib
 with gr.Blocks(css="""
 .check-button {
     background-color: purple;
@@ -182,7 +196,7 @@ with gr.Blocks(css="""
 """) as demo:
     gr.Markdown("## Toxicity Detector with Sentiment Analysis")
     
-    # Input and prediction section
+    # Text input and label outputs
     gr.Markdown("Enter a comment to analyze for toxicity and sentiment.")
     with gr.Row():
         input_box = gr.Textbox(label="Comment", placeholder="Type a comment to analyze...", lines=3)
@@ -192,11 +206,11 @@ with gr.Blocks(css="""
         predict_button = gr.Button("Check Toxicity and Sentiment", elem_classes=["check-button"])
         predict_button.click(fn=sentiment_prediction, inputs=input_box, outputs=output_box)
     
-    # Model performance section
+    # Model performance table
     gr.Markdown("## Model Performance Metrics")
     gr.DataFrame(results_df, label="Performance Summary")
     
-    # Diagrams section
+    # Load generated images from matplotlib 
     gr.Markdown("## Generated Diagrams")
     with gr.Row():
         gr.Image(os.path.join('diagrams', 'performance_bar_plot.png'), label="Model Performance Bar Plot")
