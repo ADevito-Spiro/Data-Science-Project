@@ -51,18 +51,17 @@ for label in tqdm(label_names, desc="Training models"):
     # Added hyperparameters, set the n-gram range to be a bigram 
     # --------------------------- TF-IDF -------------------------------------------------------
     # max_features = 10000, limits the maximum amount of terms to the 10000 most frequent terms
-    # ngram_range = (1,2), sets the range to be a bigram, allowing to capture a lil context
-    # min_df = 2, ignore terms that appear more than 2 times
+    # ngram_range = (1,2), sets the range to be either unigrams or bigrams, allowing to capture a lil context
+    # min_df = 2, ignore terms that appear in less than 2 documents
     # max_df = 0.8, ignores terms that appear more than 80% of the time
     # sublinear_tf = True, applies sublinear scaling to term frequencies
     # --------------------------- LogisticRegression --------------------------------------------
     # C = 1.0, inverse the regularization strength, meaning smaller values imply stronger regularization
-    # penalty = l2, L2 regularization
     # class_weight = balanced, adjusts weights, for imbalanced datasets it gives high weight to lesser frequent classes
     # max_iter = 1000, max number of iterations before convergence
     model = make_pipeline(
         TfidfVectorizer(max_features=10000, ngram_range=(1,2), min_df=2, max_df=0.8, sublinear_tf=True),
-        LogisticRegression(C=1.0, penalty='l2', class_weight='balanced', max_iter=1000)
+        LogisticRegression(C=1.0, class_weight='balanced', max_iter=1000)
     )
     model.fit(df['comment_text'].iloc[:test_size], y_train_label)
     preds = model.predict(td['comment_text'][:test_size])
