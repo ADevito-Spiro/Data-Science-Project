@@ -48,7 +48,6 @@ for label in tqdm(label_names, desc="Training models"):
     y_train_label = df[label].iloc[:test_size]
     y_test_label = tf[label].iloc[:test_size]
 
-    # Added hyperparameters, set the n-gram range to be a bigram 
     # --------------------------- TF-IDF -------------------------------------------------------
     # max_features = 10000, limits the maximum amount of terms to the 10000 most frequent terms
     # ngram_range = (1,2), sets the range to be either unigrams or bigrams, allowing to capture a lil context
@@ -158,8 +157,6 @@ def generate_diagrams(models, results_df, df, test_labels, test_x, test_size, la
 
 # Display results
 results_df = pd.DataFrame(results)
-# print("\nModel Performance:")
-# print(results_df)
 
 # Generate the diagrams
 generate_diagrams(models, results_df, df, test_labels, td['comment_text'], test_size, label_names)
