@@ -1,4 +1,6 @@
 import pandas as pd, gradio as gr, matplotlib.pyplot as plt, seaborn as sns, os, nltk
+import re
+import string
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from textblob import TextBlob
@@ -6,10 +8,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix, roc_curve, auc, precision_recall_curve, average_precision_score, classification_report
 from sklearn.pipeline import make_pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer
-from tqdm import tqdm       # Cute lil progress bar when the program is loading
+from tqdm import tqdm  # Cute lil progress bar when the program is loading
 
 # Download necessary NLTK resources if they don't exist
-# Tries and finds the resources in the local directory, if not found then it installs them
 try:
     nltk.data.find('corpora/stopwords')
     nltk.data.find('tokenizers/punkt_tab')
@@ -17,7 +18,7 @@ except LookupError:
     nltk.download('stopwords')
     nltk.download('punkt_tab')
 
-# Use NLTK to fetch their stopwords, used for text pre-processing. 
+# Use NLTK to fetch their stopwords, used for text pre-processing.
 stop_words = set(stopwords.words('english'))
 
 # Input the CSV data
@@ -28,11 +29,22 @@ df = pd.DataFrame(data)
 tf = pd.DataFrame(test_labels)
 td = pd.DataFrame(test_data)
 
-# This function removes the defined stopwords from the input text
+
+# This function removes punctuation, special characters, and defined stopwords from the input text
 def remove_stop_words(text):
+    # Remove punctuation and special characters
+    text = re.sub(f'[{re.escape(string.punctuation)}]', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    # Tokenize the text
     tokens = word_tokenize(text)
+    # Remove stopwords
     filtered_tokens = [word for word in tokens if word.lower() not in stop_words]
     return " ".join(filtered_tokens)
+
+
+# Preprocess training and test data
+df['processed_text'] = df['comment_text'].apply(remove_stop_words)
+td['processed_text'] = td['comment_text'].apply(remove_stop_words)
 
 # Ensure matching number of samples in training and testing data
 test_size = len(test_labels)
@@ -43,7 +55,7 @@ results = []
 models = {}
 classification_reports = {}
 
-# Train the LogisticRegression model using our data, required to make a pipeline with TF-IDF to ensure that LogisticRegression can process text data
+# Train the LogisticRegression model using preprocessed data
 for label in tqdm(label_names, desc="Training models"):
     y_train_label = df[label].iloc[:test_size]
     y_test_label = tf[label].iloc[:test_size]
@@ -59,14 +71,14 @@ for label in tqdm(label_names, desc="Training models"):
     # class_weight = balanced, adjusts weights, for imbalanced datasets it gives high weight to lesser frequent classes
     # max_iter = 1000, max number of iterations before convergence
     model = make_pipeline(
-        TfidfVectorizer(max_features=10000, ngram_range=(1,2), min_df=2, max_df=0.8, sublinear_tf=True),
+        TfidfVectorizer(max_features=10000, ngram_range=(1, 2), min_df=2, max_df=0.8, sublinear_tf=True),
         LogisticRegression(C=1.0, class_weight='balanced', max_iter=1000)
     )
-    model.fit(df['comment_text'].iloc[:test_size], y_train_label)
-    preds = model.predict(td['comment_text'][:test_size])
+    model.fit(df['processed_text'].iloc[:test_size], y_train_label)
+    preds = model.predict(td['processed_text'][:test_size])
     report = classification_report(y_test_label, preds, output_dict=True, zero_division=0)
-    
-    # Print scores and labels to console for our Accuracy, F1, Precision, and Recall
+
+    # Store scores for our Accuracy, F1, Precision, and Recall
     results.append({
         "Model": f"Logistic Regression - {label}",
         "Accuracy": round(report['accuracy'], 3),
@@ -78,10 +90,11 @@ for label in tqdm(label_names, desc="Training models"):
 
 results_df = pd.DataFrame(results)
 
+
 # Generate all Matplotlib diagrams
 def generate_diagrams(models, results_df, df, test_labels, test_x, test_size, label_names, output_dir='diagrams'):
     os.makedirs(output_dir, exist_ok=True)
-    
+
     # 1. Confusion Matrices
     for label in label_names:
         y_test_label = test_labels[label].iloc[:test_size]
@@ -96,10 +109,10 @@ def generate_diagrams(models, results_df, df, test_labels, test_x, test_size, la
         plt.ylabel('Actual')
         plt.savefig(os.path.join(output_dir, f'confusion_matrix_{label}.png'), bbox_inches='tight')
         plt.close()
-    
+
     # 2. Bar Plot of Model Performance
     plt.figure(figsize=(10, 6))
-    results_df_melted = pd.melt(results_df, id_vars='Model', value_vars=['Accuracy', 'F1-Score'], 
+    results_df_melted = pd.melt(results_df, id_vars='Model', value_vars=['Accuracy', 'F1-Score'],
                                 var_name='Metric', value_name='Score')
     sns.barplot(x='Model', y='Score', hue='Metric', data=results_df_melted)
     plt.title('Model Performance Across Toxicity Labels')
@@ -110,7 +123,7 @@ def generate_diagrams(models, results_df, df, test_labels, test_x, test_size, la
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'performance_bar_plot.png'))
     plt.close()
-    
+
     # 3. Class Distribution Pie Charts
     plt.figure(figsize=(12, 8))
     for i, label in enumerate(label_names, 1):
@@ -121,7 +134,7 @@ def generate_diagrams(models, results_df, df, test_labels, test_x, test_size, la
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'class_distribution_pie.png'))
     plt.close()
-    
+
     # 4. ROC Curves
     plt.figure(figsize=(8, 6))
     for label in label_names:
@@ -138,7 +151,7 @@ def generate_diagrams(models, results_df, df, test_labels, test_x, test_size, la
     plt.grid(True)
     plt.savefig(os.path.join(output_dir, 'roc_curves.png'))
     plt.close()
-    
+
     # 5. Precision-Recall Curves
     plt.figure(figsize=(8, 6))
     for label in label_names:
@@ -155,13 +168,15 @@ def generate_diagrams(models, results_df, df, test_labels, test_x, test_size, la
     plt.savefig(os.path.join(output_dir, 'precision_recall_curves.png'))
     plt.close()
 
+
 # Display results
 results_df = pd.DataFrame(results)
 
-# Generate the diagrams
-generate_diagrams(models, results_df, df, test_labels, td['comment_text'], test_size, label_names)
+# Generate the diagrams using preprocessed test data
+generate_diagrams(models, results_df, df, test_labels, td['processed_text'], test_size, label_names)
 
-# Use TextBlob's built in sentiment analysis to determine the sentiment of the provided text, this checks after the stopwords have been removed
+
+# Use TextBlob's built-in sentiment analysis to determine the sentiment of the provided text
 def check_sentiment(text):
     blob = TextBlob(text)
     polarity = blob.sentiment.polarity
@@ -169,8 +184,8 @@ def check_sentiment(text):
     sentiment = 'Positive' if polarity > 0 else 'Negative' if polarity < 0 else 'Neutral'
     return sentiment, polarity, subjectivity
 
-# Process the data to remove the stop words from the inputted sentence, after processed take the new sentence and use the LogisticRegression model to predict the labels
-# Then uses the processed words to check the sentiment of the sentence, then returning the output
+
+# Process the input comment to remove stop words, punctuation, and special characters, then predict toxicity and sentiment
 def sentiment_prediction(comments):
     processed = remove_stop_words(comments)
     toxic_labels = [label for label, model in models.items() if model.predict([processed])[0] == 1]
@@ -179,7 +194,8 @@ def sentiment_prediction(comments):
         return f"This comment is: {', '.join(toxic_labels)}. \nSentiment: {sentiment} (Polarity: {polarity}, Subjectivity: {subjectivity})"
     return f"This comment is not toxic in any category. \nSentiment: {sentiment} (Polarity: {polarity}, Subjectivity: {subjectivity})"
 
-# Use Gradio to handle our text input and displaying our diagrams generated from matplotlib
+
+# Use Gradio to handle text input and display diagrams generated from matplotlib
 with gr.Blocks(css="""
 .check-button {
     background-color: purple;
@@ -191,7 +207,7 @@ with gr.Blocks(css="""
 }
 """) as demo:
     gr.Markdown("## Toxicity Detector with Sentiment Analysis")
-    
+
     # Text input and label outputs
     gr.Markdown("Enter a comment to analyze for toxicity and sentiment.")
     with gr.Row():
@@ -201,11 +217,11 @@ with gr.Blocks(css="""
     with gr.Row():
         predict_button = gr.Button("Check Toxicity and Sentiment", elem_classes=["check-button"])
         predict_button.click(fn=sentiment_prediction, inputs=input_box, outputs=output_box)
-    
+
     # Model performance table
     gr.Markdown("## Model Performance Metrics")
     gr.DataFrame(results_df, label="Performance Summary")
-    
+
     # Load generated images from matplotlib 
     gr.Markdown("## Generated Diagrams")
     with gr.Row():
@@ -217,11 +233,11 @@ with gr.Blocks(css="""
     gr.Markdown("### Confusion Matrices")
     for i in range(0, len(label_names), 2):
         with gr.Row():
-            gr.Image(os.path.join('diagrams', f'confusion_matrix_{label_names[i]}.png'), 
+            gr.Image(os.path.join('diagrams', f'confusion_matrix_{label_names[i]}.png'),
                      label=f"Confusion Matrix - {label_names[i]}")
             if i + 1 < len(label_names):
-                gr.Image(os.path.join('diagrams', f'confusion_matrix_{label_names[i+1]}.png'), 
-                         label=f"Confusion Matrix - {label_names[i+1]}")
+                gr.Image(os.path.join('diagrams', f'confusion_matrix_{label_names[i + 1]}.png'),
+                         label=f"Confusion Matrix - {label_names[i + 1]}")
             else:
                 gr.Image(None, visible=False)
 
